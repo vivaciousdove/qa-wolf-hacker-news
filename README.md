@@ -1,59 +1,134 @@
-# 🐺 QA Wolf Take Home Assignment
+## Future Enhancements (Roadmap)
 
-Welcome to the QA Wolf take home assignment for our [QA Engineer](https://www.task-wolf.com/apply-qae) role! We appreciate your interest and look forward to seeing what you come up with.
+This project was intentionally scoped as an MVP to ensure correctness,
+clarity, and debuggability before adding complexity.
 
-## Instructions
+Each comment answers three implicit questions:
 
-This assignment has two questions as outlined below. When you are done, upload your assignment to our [application page](https://www.task-wolf.com/apply-qae):
+1-What does this do?
+
+2-Why does it exist?
+
+3-How does it scale beyond the assignment?
 
 
-### Question 1
+## If extended further, the next logical enhancements would include:
+ OBSERVABILITY & DIAGNOSTICS
+  - Richer failure context and retry logic
+  - Data-collection-only execution mode
+```
+js
+// Collect a small window of surrounding items when a failure occurs.
+// This gives immediate context (before/after) so a reviewer can
+// understand *why* sorting failed without rerunning the test.
+function failureContext(items, idx, window = 3) {
+  const start = Math.max(0, idx - window);
+  const end = Math.min(items.length, idx + window + 1);
+  return items.slice(start, end).map((x, i) => ({
+    at: start + i + 1,
+    id: x.id,
+    age: x.age,
+    ageSeconds: x.ageSeconds,
+    title: x.title,
+  }));
+}
 
-In this assignment, you will create a script on [Hacker News](https://news.ycombinator.com/) using JavaScript and Microsoft's [Playwright](https://playwright.dev/) framework. 
+// Example usage: attach this context to a validation failure object
+```
 
-1. Install node modules by running `npm i`.
+ COVERAGE EXPANSION
+  - Validation of additional Hacker News feeds
+  - Configurable sorting and freshness rules
+```
+js
+// Allow the same validation logic to run against different
+// Hacker News feeds without duplicating code.
+// This makes coverage expansion a configuration change, not a rewrite.
+const FEED = process.env.FEED || 'newest'; // newest | news | ask | show
+const START_URL = `${BASE}/${FEED}`;
 
-2. Edit the `index.js` file in this project to go to [Hacker News/newest](https://news.ycombinator.com/newest) and validate that EXACTLY the first 100 articles are sorted from newest to oldest. You can run your script with the `node index.js` command.
+console.log(`Running validation on feed: ${START_URL}`);
+```
 
-Note that you are welcome to update Playwright or install other packages as you see fit, however you must utilize Playwright in this assignment.
+ PERFORMANCE & STABILITY
+  - Pagination and render-time thresholds
+  - Early detection of performance regressions
+```
+js
+// Track page load times during pagination to detect
+// performance regressions that don't break functionality
+// but still impact user experience.
+const perf = { pageLoads: [] };
+const MAX_PAGE_LOAD_MS = Number(process.env.MAX_PAGE_LOAD_MS || 3000);
 
-### Question 2
+async function timedGoto(page, url) {
+  const start = Date.now();
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: TIMEOUT_MS });
+  const duration = Date.now() - start;
+  perf.pageLoads.push(duration);
 
-Why do you want to work at QA Wolf? Please record a short, ~2 min video using [Loom](https://www.loom.com/) that includes:
+  if (duration > MAX_PAGE_LOAD_MS) {
+    console.warn(`⚠️ Slow page load: ${duration}ms (threshold ${MAX_PAGE_LOAD_MS}ms)`);
+  }
+}
+```
 
-1. Your answer 
+ REPORTING & VISUALIZATION
+  - HTML reports generated from artifacts
+  - Historical trend analysis across runs
+```
+js
+// Generate a lightweight HTML report from run metadata.
+// This turns raw automation output into a human-readable artifact
+// that can be opened locally or attached to CI results.
+function writeHtmlReport(stamp, result) {
+  ensureDir(ART_DIR);
 
-2. A walk-through demonstration of your code, showing a successful execution
+  const html = `<!doctype html>
+<html>
+  <body>
+    <h1>Hacker News Validation Report</h1>
+    <p><strong>Timestamp:</strong> ${stamp}</p>
+    <p><strong>Result:</strong> ${result.status}</p>
+    <p><strong>Pages Visited:</strong> ${result.pagesVisited}</p>
+    <pre>${result.detail || ''}</pre>
+  </body>
+</html>`;
 
-The answer and walkthrough should be combined into *one* video, and must be recorded using Loom as the submission page only accepts Loom links.
+  fs.writeFileSync(
+    path.join(ART_DIR, `report-${stamp}.html`),
+    html,
+    'utf8'
+  );
+}
+```
 
-## Frequently Asked Questions
+ AGENTIZATION (CI / Scheduled Execution)
+  - Scheduled execution with alerts
+  - Long-running, self-monitoring QA agent behavior
+```
+yaml
+# Run the validation script on a schedule so it behaves like
+# a continuously monitoring QA agent rather than a one-off test.
+# Failures surface automatically without manual execution.
+name: hn-agent
+on:
+  schedule:
+    - cron: "0 */6 * * *"   # Run every 6 hours
+  workflow_dispatch:
 
-### What is your hiring process? When will I hear about next steps?
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: node index.js
+```
 
-This take home assignment is the first step in our hiring process, followed by a final round interview if it goes well. **We review every take home assignment submission and promise to get back to you either way within two weeks (usually sooner).** The only caveat is if we are out of the office, in which case we will get back to you when we return. If it has been more than two weeks and you have not heard from us, please do follow up.
-
-The final round interview is a 2-hour technical work session that reflects what it is like to work here. We provide a $150 stipend for your time for the final round interview regardless of how it goes. After that, there may be a short chat with our director about your experience and the role.
-
-Our hiring process is rolling where we review candidates until we have filled our openings. If there are no openings left, we will keep your contact information on file and reach out when we are hiring again.
-
-### Having trouble uploading your assignment?
-Be sure to delete your `node_modules` file, then zip your assignment folder prior to upload. 
-
-### How do you decide who to hire?
-
-We evaluate candidates based on three criteria:
-
-- Technical ability (as demonstrated in the take home and final round)
-- Customer service orientation (as this role is customer facing)
-- Alignment with our mission and values (captured [here](https://qawolf.notion.site/Mission-and-Values-859c7d0411ba41349e1b318f4e7abc8f))
-
-This means whether we hire you is based on how you do during our interview process, not on your previous experience (or lack thereof). Note that you will also need to pass a background check to work here as our customers require this.
-
-### How can I help my application stand out?
-
-While the assignment has clear requirements, we encourage applicants to treat it as more than a checklist. If you're genuinely excited about QA Wolf, consider going a step further—whether that means building a simple user interface, adding detailed error handling or reporting, improving the structure of the script, or anything else that showcases your unique perspective.
-
-There's no "right" answer—we're curious to see what you choose to do when given freedom and ambiguity. In a world where tools can help generate working code quickly and make it easier than ever to complete technical take-homes, we value originality and intentionality. If that resonates with you, use this assignment as a chance to show us how you think.
-
-Applicants who approach the assignment as a creative challenge, not just a checklist, tend to perform best in our process.
+This roadmap reflects how the script could evolve in a production QA
+environment without over-engineering the initial solution.
